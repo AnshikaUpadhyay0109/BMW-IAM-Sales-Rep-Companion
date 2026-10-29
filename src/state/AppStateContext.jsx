@@ -3,17 +3,20 @@ import { REPS, ME } from '../data/reps';
 
 const DEFAULT_FORM = {
   topics: [],
-  challenges: [],
-  opportunities: [],
-  tools: { connectDrive: null, partsOnline: null, retailOnline: null },
-  status: null,
-  priority: null,
   notes: '',
+  pl24: '',
+  aos: '',
+  challenge: '',
+  opportunity: '',
+  competitors: '',
   photos: [],
   actionItems: [{ text: '', owner: REPS[ME].name, due: '', prio: 'Medium' }],
+  status: '',
   aiSummary: '',
-  competitors: '',
-  actions: [],
+  visitId: '',
+  voiceNoteKey: null,
+  transcriptSegments: [],
+  fullTranscript: '',
 };
 
 const INITIAL = {
@@ -26,8 +29,11 @@ const INITIAL = {
   sortBy: 'signal',
   openDealerIds: [],
   form: { ...DEFAULT_FORM },
+  dealerVisitStatus: {},
   reports: [],
   toast: null,
+  dealers: [],
+  dealersLoading: false,
 };
 
 function reducer(state, action) {
@@ -102,14 +108,52 @@ function reducer(state, action) {
     case 'SET_REPORT':
       return { ...state, lastViewedReport: action.report };
 
-    case 'SAVE_REPORT':
-      return { ...state, reports: [...state.reports, action.report], view: 'report' };
+    case 'SAVE_REPORT': {
+      const submitCode = state.selectedDealer?.code;
+      const today = new Date().toISOString().slice(0, 10);
+      return {
+        ...state,
+        reports: [...state.reports, action.report],
+        view: 'report',
+        dealerVisitStatus: submitCode
+          ? { ...state.dealerVisitStatus, [submitCode]: { status: 'submitted', visitDate: today } }
+          : state.dealerVisitStatus,
+      };
+    }
 
     case 'SHOW_TOAST':
       return { ...state, toast: { message: action.message || action.text, type: action.toastType || action.type2 || 'info' } };
 
     case 'HIDE_TOAST':
       return { ...state, toast: null };
+
+    case 'SET_DEALER_VISIT_STATUS':
+      return { ...state, dealerVisitStatus: { ...state.dealerVisitStatus, [action.dealerCode]: { status: action.status, visitDate: action.visitDate || null } } };
+
+    case 'SET_DEALER_VISIT_STATUSES':
+      return { ...state, dealerVisitStatus: { ...state.dealerVisitStatus, ...action.statuses } };
+
+    case 'MARK_REPORT_SEEN': {
+      const prev = state.dealerVisitStatus?.[action.dealerCode] || {};
+      return { ...state, dealerVisitStatus: { ...state.dealerVisitStatus, [action.dealerCode]: { ...prev, managerViewed: true } } };
+    }
+
+    case 'VIEW_REPORT': {
+      const prevVs = state.dealerVisitStatus?.[action.dealer.code] || {};
+      return {
+        ...state,
+        selectedDealer: action.dealer,
+        lastViewedReport: action.report,
+        view: 'report',
+        dealerVisitStatus: { ...state.dealerVisitStatus, [action.dealer.code]: { ...prevVs, managerViewed: true } },
+      };
+    }
+
+    case 'SET_DEALERS_LOADING':
+      return { ...state, dealersLoading: action.loading };
+
+    case 'SET_DEALERS':
+      return { ...state, dealers: action.dealers, dealersLoading: false };
 
     default:
       return state;

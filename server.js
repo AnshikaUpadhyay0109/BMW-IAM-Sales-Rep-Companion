@@ -194,9 +194,10 @@ app.post("/api/ai/generate", async (req, res) => {
 const EXTRACT_SCHEMA = {
   dealer: {
     topics:        ["Stock", "Delivery", "PL24", "AOS", "Marketing", "Competition", "Pricing", "Reporting", "Other"],
-    challenges:    ["Stock Availability", "Delivery Issues", "PL24 Adoption", "AOS Compliance", "Competitor Pressure", "Pricing Concerns", "Training Needed", "Other"],
-    opportunities: ["Increase PL24 Adoption", "Expand Parts Range", "AOS Upsell", "Fleet Conversion", "Workshop Upgrade", "Marketing Support", "Other"],
-    owners:        ["Dealer", "Rep", "Both"],
+    challenges:    ["Stock shortages", "Competitive pressure", "Pricing concerns", "Training needs", "CRM burden", "Delivery delays", "Budget constraints", "Seasonal slowdown", "Other"],
+    opportunities: ["Fleet renewal", "Accessories bundle", "Maintenance restock", "Campaign qualification", "New account", "Warranty upsell", "Volume discount", "Other"],
+    toolsUsage:    ["Using well", "Needs help", "Not using"],
+    owners:        ["Marcus Schmidt", "Anna Weber"],
     priorities:    ["High", "Medium", "Low"],
     statuses:      ["Good", "Monitor", "Needs Support"],
   },
@@ -269,6 +270,8 @@ ALLOWED VALUES:
 - topics_discussed (array, pick any that apply): ${list(s.topics)}
 - biggest_challenge (single): ${list(s.challenges)}
 - biggest_opportunity (single): ${list(s.opportunities)}
+- tools_usage.pl24 (single): ${list(s.toolsUsage)}
+- tools_usage.aos (single): ${list(s.toolsUsage)}
 - competitor_activity.mode (single): "Observed" or "Not Observed"
 - actions_agreed[].owner (single): ${list(s.owners)}
 - actions_agreed[].priority (single): ${list(s.priorities)}
@@ -281,11 +284,12 @@ RETURN THIS EXACT JSON SHAPE:
   "visit_notes": "",
   "biggest_challenge": "",
   "biggest_opportunity": "",
+  "tools_usage": { "pl24": "", "aos": "" },
   "competitor_activity": { "mode": "Not Observed", "comment": "" },
   "actions_agreed": [ { "action": "", "owner": "", "dueDate": "", "priority": "" } ],
   "overall_status": ""
 }
-Notes: use [] for actions_agreed if none were mentioned. "dueDate" must be ISO yyyy-mm-dd or "".`;
+Notes: use [] for actions_agreed if none were mentioned. "dueDate" must be ISO yyyy-mm-dd or "". tools_usage captures how the dealer is using PL24 and AOS tools — only fill if explicitly mentioned.`;
 }
 
 // Robustly parse a JSON object out of an LLM reply (handles ```json fences).
@@ -305,9 +309,16 @@ function parseJsonObject(text) {
   }
 }
 
-const keepEnum = (val, allowed) => (allowed.includes(val) ? val : "");
+const keepEnum = (val, allowed) => {
+  if (!val) return "";
+  const exact = allowed.find(a => a === val);
+  if (exact) return exact;
+  const lower = val.toLowerCase();
+  const match = allowed.find(a => a.toLowerCase() === lower);
+  return match || "";
+};
 const keepEnumArray = (arr, allowed) =>
-  Array.isArray(arr) ? arr.filter((v) => allowed.includes(v)) : [];
+  Array.isArray(arr) ? arr.map(v => keepEnum(v, allowed)).filter(Boolean) : [];
 
 // Drop any model-invented values that are not in the schema (grounding gate).
 function validateExtraction(formType, raw) {
@@ -356,12 +367,17 @@ function validateExtraction(formType, raw) {
 
   // dealer
   const ca = raw.competitor_activity || {};
+  const tu = raw.tools_usage || {};
   return {
     topics_discussed: keepEnumArray(raw.topics_discussed, s.topics),
     other_topic: str(raw.other_topic),
     visit_notes: str(raw.visit_notes),
     biggest_challenge: keepEnum(str(raw.biggest_challenge), s.challenges),
     biggest_opportunity: keepEnum(str(raw.biggest_opportunity), s.opportunities),
+    tools_usage: {
+      pl24: keepEnum(str(tu.pl24), s.toolsUsage),
+      aos: keepEnum(str(tu.aos), s.toolsUsage),
+    },
     competitor_activity: {
       mode: ["Observed", "Not Observed"].includes(ca.mode) ? ca.mode : "Not Observed",
       comment: str(ca.comment),

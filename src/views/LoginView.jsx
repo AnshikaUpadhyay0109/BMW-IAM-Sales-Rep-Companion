@@ -15,6 +15,7 @@ const CARDS = [
     email: 'marcus.demo@corporate.com',
     pw: 'Marcus@2026',
     isManager: false,
+    repId: 'ms',
   },
   {
     id: 'manager',
@@ -39,7 +40,7 @@ export function LoginView() {
     const result = await api.login(card.email, card.pw);
     setLoading(false);
     if (result.success) {
-      dispatch({ type: 'LOGIN', user: { ...result.user, name: card.name, isManager: card.isManager } });
+      dispatch({ type: 'LOGIN', user: { ...result.user, name: card.name, isManager: card.isManager, repId: card.repId } });
     }
   }
 

@@ -2,147 +2,218 @@ import React from 'react';
 import { Icon } from '../primitives/Icon';
 import { useAppState, useAppDispatch } from '../../state/AppStateContext';
 import { REPS } from '../../data/reps';
-import { SIG } from '../../data/dealers';
-import { SEED_REPORTS } from '../../data/seedReports';
+import { SIG, ABC_RANK } from '../../data/dealers';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { fmtEur, sgn, dCls, arw, ago, fmtD, TODAY, addDays } from '../../utils/formatters';
+import { fmtEur, fmtDM, sgn, dCls, arw, yoyCol, MONTH_NAME, TODAY } from '../../utils/formatters';
 
-export default function DealerCard({ dealer }) {
-  const { openDealerIds, user } = useAppState();
+function abcDelta(abc, abcPrev) {
+  if (!abcPrev || abc === abcPrev) return { t: '– no change', c: 'fl' };
+  const x = (ABC_RANK[abc] || 0) - (ABC_RANK[abcPrev] || 0);
+  return x > 0 ? { t: `▲ from ${abcPrev}`, c: 'up' } : { t: `▼ from ${abcPrev}`, c: 'dn' };
+}
+
+function MiniKpis({ d }) {
+  const sd = d.salesPrev ? (d.sales - d.salesPrev) / d.salesPrev * 100 : 0;
+  const pd = (d.purch || 0) - (d.purchPrev || 0);
+  const cd = (d.cust || 0) - (d.custPrev || 0);
+  const ab = abcDelta(d.abc, d.abcPrev);
+
+  const chip = (label, val, delta, cls) => (
+    <span className="mk">
+      <span className="mkl">{label}</span>
+      <b>{val}</b>
+      <span className={`kd ${cls}`}>{delta}</span>
+    </span>
+  );
+
+  return (
+    <>
+      {chip('Sales', fmtEur(d.sales || 0), `${arw(sd)} ${sgn(sd)}%`, dCls(sd))}
+      {chip('Purchase YoY',
+        <span style={{ color: yoyCol(d.purch || 0) }}>{sgn(d.purch || 0)}%</span>,
+        `${arw(pd)} ${sgn(pd)} pp`, dCls(pd))}
+      {chip('Customer YoY',
+        <span style={{ color: yoyCol(d.cust || 0) }}>{sgn(d.cust || 0)}%</span>,
+        `${arw(cd)} ${sgn(cd)} pp`, dCls(cd))}
+      {chip('ABC',
+        <span className={`abc abc-${d.abc}`} style={{ width: 18, height: 18, fontSize: 11, borderRadius: 5 }}>{d.abc}</span>,
+        ab.t, ab.c)}
+    </>
+  );
+}
+
+function DealerKpis({ d }) {
+  const sd = d.salesPrev ? (d.sales - d.salesPrev) / d.salesPrev * 100 : 0;
+  const pd = (d.purch || 0) - (d.purchPrev || 0);
+  const cd = (d.cust || 0) - (d.custPrev || 0);
+  const ab = abcDelta(d.abc, d.abcPrev);
+
+  return (
+    <div className="kpis">
+      <div className="kpi">
+        <div className="kl">Sales</div>
+        <div className="kv">{fmtEur(d.sales || 0)}</div>
+        <div className={`kd ${dCls(sd)}`}>{arw(sd)} {sgn(sd)}%</div>
+      </div>
+      <div className="kpi">
+        <div className="kl">Purchase YoY</div>
+        <div className="kv" style={{ color: yoyCol(d.purch || 0) }}>{sgn(d.purch || 0)}%</div>
+        <div className={`kd ${dCls(pd)}`}>{arw(pd)} {sgn(pd)} pp</div>
+      </div>
+      <div className="kpi">
+        <div className="kl">Customer YoY</div>
+        <div className="kv" style={{ color: yoyCol(d.cust || 0) }}>{sgn(d.cust || 0)}%</div>
+        <div className={`kd ${dCls(cd)}`}>{arw(cd)} {sgn(cd)} pp</div>
+      </div>
+      <div className="kpi">
+        <div className="kl">ABC segment</div>
+        <div className="kv"><span className={`abc abc-${d.abc}`}>{d.abc}</span></div>
+        <div className={`kd ${ab.c}`}>{ab.t}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function DealerCard({ dealer, onViewReport }) {
+  const { openDealerIds, user, dealerVisitStatus } = useAppState();
   const dispatch = useAppDispatch();
   const mobile = useIsMobile();
   const d = dealer;
   const open = openDealerIds.includes(d.id);
   const rep = REPS[d.rep];
-  const sig = SIG[d.signal];
-  const visitDate = addDays(TODAY, -d.lastDays);
-  const hasReport = !!SEED_REPORTS[d.id];
+  const sig = SIG[d.signal] || SIG.watch;
   const isManager = user?.isManager;
+  const mon = MONTH_NAME.slice(0, 3);
+
+  const vs = dealerVisitStatus?.[d.code];
+  const isDraft = vs?.status === 'draft';
+  const isSubmitted = vs?.status === 'submitted';
+  const visitDateLabel = vs?.visitDate === TODAY ? 'TODAY' : vs?.visitDate ? fmtDM(vs.visitDate).toUpperCase() : '';
+  const isNewReport = isManager && isSubmitted && !vs?.managerViewed;
+
+  const visitStatusText = isSubmitted ? `Visited ${visitDateLabel.toLowerCase()}` : d.visited ? 'Visited' : `Not visited in ${mon}`;
+  const visitStatusColor = isSubmitted ? 'var(--green)' : d.visited ? 'var(--green)' : (d.signal === 'critical' ? '#C8283C' : '#A35F00');
+
+  function handleViewReport(e) {
+    e.stopPropagation();
+    if (onViewReport) onViewReport(d);
+  }
+
+  const repButton = (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <button className="btn pri sm" onClick={e => { e.stopPropagation(); dispatch({ type: 'SELECT_DEALER', dealer: d }); }}>
+        <Icon name={isDraft ? 'edit' : 'pin'} size={14} color="#fff" />
+        {isDraft ? 'Resume visit' : 'Start visit'}
+      </button>
+      {isSubmitted && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          Visited {visitDateLabel}
+        </span>
+      )}
+    </div>
+  );
+
+  const mgrButton = isSubmitted ? (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <button className="btn pri sm" onClick={handleViewReport}>
+        <Icon name="doc" size={14} color="#fff" />
+        View report
+      </button>
+      {isNewReport && (
+        <span className="pill" style={{ background: 'var(--ac)', color: '#fff', fontSize: 9, padding: '1px 7px' }}>
+          New report
+        </span>
+      )}
+    </div>
+  ) : null;
 
   return (
-    <div className={`card dc${open ? ' open' : ''}`}>
-      <div className="dc-row" onClick={() => dispatch({ type: 'TOGGLE_DEALER', id: d.id })}>
+    <article className={`card dc${open ? ' open' : ''}`}>
+      {/* Header row */}
+      <div className={`dc-row${isManager ? '' : ' rp'}`} onClick={() => dispatch({ type: 'TOGGLE_DEALER', id: d.id })}>
         <div className="dc-id">
-          <div className={`abc abc-${d.abc}`}>{d.abc}</div>
-          <div>
+          <div className="dot" style={{ background: sig.c, width: 10, height: 10 }} />
+          <div style={{ minWidth: 0 }}>
             <div className="dc-name">
               {d.name}
               <span className="pill" style={{ background: sig.bg, color: sig.c }}>{sig.l}</span>
-              {d.abcPrev !== d.abc && (
-                <span className="pill" style={{ background: 'var(--ft)', color: 'var(--dim)', fontSize: 9 }}>
-                  was {d.abcPrev}
-                </span>
-              )}
             </div>
-            <div className="dc-sub">{d.code} · {d.contact}, {d.ctitle}</div>
+            <div className="dc-sub">{d.code}{d.contact !== '—' ? ` · ${d.contact}${d.ctitle ? `, ${d.ctitle}` : ''}` : ''}</div>
           </div>
         </div>
+
         <div className="dc-meta">
           <div className="m">
             <span className="ml">Last visit</span>
-            <span className="mv">
-              {d.visited ? ago(visitDate) : <span className="dim">Not visited</span>}
-            </span>
+            <span className="mv">{d.visited ? 'Visited' : 'No visit yet'}</span>
           </div>
-          <div className="m">
-            <span className="ml">Sales</span>
-            <span className="mv">{fmtEur(d.sales)}</span>
-          </div>
-          {isManager && (
-            <div className="m tg-name">
-              <span className="ml">Rep</span>
+          {isManager && rep && (
+            <div className="m">
+              <span className="ml">Visited by</span>
               <span className="mv">
                 <div className="ava" style={{ width: 18, height: 18, fontSize: 8, background: rep.color }}>{rep.ini}</div>
-                {rep.first}
+                {rep.name}
               </span>
             </div>
           )}
-        </div>
-        <div className="dc-act">
-          <div className="dc-tags">
-            {d.abc !== d.abcPrev && (
-              <span className="pill s tg-band" style={{ background: sig.bg, color: sig.c }}>
-                {d.abc} ← {d.abcPrev}
-              </span>
-            )}
+          <div className="m">
+            <span className="ml">Visit status</span>
+            <span className="mv" style={{ color: visitStatusColor, fontWeight: 600 }}>{visitStatusText}</span>
           </div>
+        </div>
+
+        <div className="dc-act">
+          {!mobile && (isManager ? mgrButton : repButton)}
           <button className="chev" onClick={e => { e.stopPropagation(); dispatch({ type: 'TOGGLE_DEALER', id: d.id }); }}>
-            <Icon name="chev" size={14} color="var(--dim)" />
+            <Icon name="chev" size={16} color="var(--sub)" />
           </button>
         </div>
       </div>
 
+      {/* Collapsed: mini KPI chips */}
+      {!open && (
+        <div className="mks">
+          <MiniKpis d={d} />
+        </div>
+      )}
+
+      {/* Expanded: full KPI grid + footer */}
       {open && (
         <>
-          <div className="mks">
-            <span className="mk"><span className="mkl">Purchase</span> <b>{sgn(d.purch)}%</b> <span className={`kd ${dCls(d.purch)}`}>{arw(d.purch)}</span></span>
-            <span className="mk"><span className="mkl">Customer</span> <b>{sgn(d.cust)}%</b> <span className={`kd ${dCls(d.cust)}`}>{arw(d.cust)}</span></span>
-            <span className="mk"><span className="mkl">Sales</span> <b>{fmtEur(d.sales)}</b></span>
-          </div>
-          <div className="kpis">
-            <div className="kpi">
-              <div className="kl">Parts Purchases YoY</div>
-              <div className="kv" style={{ color: d.purch >= 0 ? 'var(--green)' : 'var(--red)' }}>{sgn(d.purch)}%</div>
-              <div className={`kd ${dCls(d.purch)}`}>{arw(d.purch)} prev {sgn(d.purchPrev)}%</div>
-            </div>
-            <div className="kpi">
-              <div className="kl">Customer Trans. YoY</div>
-              <div className="kv" style={{ color: d.cust >= 0 ? 'var(--green)' : 'var(--red)' }}>{sgn(d.cust)}%</div>
-              <div className={`kd ${dCls(d.cust)}`}>{arw(d.cust)} prev {sgn(d.custPrev)}%</div>
-            </div>
-            <div className="kpi">
-              <div className="kl">Monthly Sales</div>
-              <div className="kv">{fmtEur(d.sales)}</div>
-              <div className={`kd ${dCls(d.sales - d.salesPrev)}`}>vs {fmtEur(d.salesPrev)} prev</div>
-            </div>
-            <div className="kpi">
-              <div className="kl">ABC Classification</div>
-              <div className="kv"><span className={`abc abc-${d.abc}`} style={{ width: 20, height: 20, fontSize: 11 }}>{d.abc}</span></div>
-              {d.abc !== d.abcPrev && <div className={`kd ${d.abc < d.abcPrev ? 'dn' : 'up'}`}>was {d.abcPrev}</div>}
-            </div>
-          </div>
-          {d.visited && (
-            <div className="dc-f">
-              <div className="lv">
-                <div className="m"><span className="ml">Visit date</span><span className="mv"><Icon name="cal" size={12} color="var(--dim)" />{fmtD(visitDate)}</span></div>
-                <div className="m"><span className="ml">Time</span><span className="mv">{d.time}</span></div>
-                <div className="m"><span className="ml">Contact</span><span className="mv">{d.contact}</span></div>
-              </div>
-              {SEED_REPORTS[d.id] && (
-                <div className="sum">{SEED_REPORTS[d.id].summary.slice(0, 180)}...</div>
-              )}
-            </div>
-          )}
-
-          {/* Action buttons */}
-          {mobile ? (
+          <DealerKpis d={d} />
+          {mobile && (
             <div className="dc-cta-m">
-              {d.visited && hasReport ? (
-                <button className="btn gho" onClick={() => { dispatch({ type: 'SET_REPORT', report: SEED_REPORTS[d.id] }); dispatch({ type: 'SET_VIEW', view: 'report' }); }}>
-                  <Icon name="doc" size={14} /> View Report
-                </button>
-              ) : !isManager ? (
-                <button className="btn pri" onClick={() => dispatch({ type: 'SELECT_DEALER', dealer: d })}>
-                  <Icon name="edit" size={14} color="#fff" /> Start Visit
-                </button>
-              ) : null}
-            </div>
-          ) : (
-            <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8 }}>
-              {d.visited && hasReport && (
-                <button className="btn gho sm" onClick={() => { dispatch({ type: 'SET_REPORT', report: SEED_REPORTS[d.id] }); dispatch({ type: 'SET_VIEW', view: 'report' }); }}>
-                  <Icon name="doc" size={13} /> View Report
-                </button>
-              )}
-              {!isManager && (
-                <button className="btn pri sm" onClick={() => dispatch({ type: 'SELECT_DEALER', dealer: d })}>
-                  <Icon name="edit" size={13} color="#fff" /> {d.visited ? 'New Visit' : 'Start Visit'}
-                </button>
+              {isManager ? (
+                isSubmitted && (
+                  <>
+                    <button className="btn pri sm" onClick={handleViewReport}>
+                      <Icon name="doc" size={14} color="#fff" />
+                      View report
+                    </button>
+                    {isNewReport && (
+                      <span className="pill" style={{ background: 'var(--ac)', color: '#fff', fontSize: 9, padding: '1px 7px', marginTop: 4 }}>
+                        New report
+                      </span>
+                    )}
+                  </>
+                )
+              ) : (
+                <>
+                  <button className="btn pri sm" onClick={e => { e.stopPropagation(); dispatch({ type: 'SELECT_DEALER', dealer: d }); }}>
+                    <Icon name={isDraft ? 'edit' : 'pin'} size={14} color="#fff" />
+                    {isDraft ? 'Resume visit' : 'Start visit'}
+                  </button>
+                  {isSubmitted && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                      Visited {visitDateLabel}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           )}
         </>
       )}
-    </div>
+    </article>
   );
 }

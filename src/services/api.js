@@ -285,7 +285,20 @@ export const api = {
     });
   },
 
+  async patchVisitCapture(dealerCode, visitId, fields) {
+    return request(`/visit-capture/${dealerCode}/${visitId}`, {
+      method: "PATCH",
+      body: JSON.stringify(fields),
+    });
+  },
+
   async searchVisitCapture(dealerCode, formType, visitDate) {
     return request(`/visit-capture/${dealerCode}/search?form_type=${formType}&visit_date=${visitDate}`);
+  },
+
+  async getLatestVisitCapture(dealerCode, formType, status) {
+    let url = `/visit-capture/${dealerCode}/search?form_type=${formType}`;
+    if (status) url += `&status=${status}`;
+    return request(url);
   },
 };
