@@ -49,6 +49,15 @@ export function VisitReviewView() {
       ...report,
     };
     const rep = REPS[repId];
+    const visitSummary = await api.summarizeVisit({
+      dealerName: dealer.name,
+      topics: form.topics,
+      notes: form.notes,
+      actions: form.actionItems?.filter(a => a.text?.trim()),
+      challenge: form.challenge,
+      opportunity: form.opportunity,
+      status: form.status,
+    }).catch(() => null);
     const payload = {
       form_type: 'dealer',
       status: 'submitted',
@@ -75,6 +84,7 @@ export function VisitReviewView() {
         overall_status: form.status,
         voice_note_key: form.voiceNoteKey || null,
         ai_summary: form.aiSummary || '',
+        visit_summary: visitSummary || '',
         photos: (form.photos || []).filter(p => p.s3Key).map(p => ({ key: p.s3Key, name: p.name })),
       },
     };
@@ -84,7 +94,7 @@ export function VisitReviewView() {
     } catch {
       dispatch({ type: 'SHOW_TOAST', message: 'Saved locally (offline)', toastType: 'info' });
     }
-    dispatch({ type: 'SAVE_REPORT', report: fullReport });
+    dispatch({ type: 'SAVE_REPORT', report: fullReport, summary: visitSummary || '' });
     setSaving(false);
   };
 
@@ -92,7 +102,7 @@ export function VisitReviewView() {
     <>
       <div className="vh">
         <button className="btn gho sm" onClick={() => dispatch({ type: 'SET_VIEW', view: 'visit' })}>
-          ‹ Edit details
+          {mobile ? '‹' : '‹ Edit details'}
         </button>
         <div className="hide-m" style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--ft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="store" size={16} color="var(--sub)" />

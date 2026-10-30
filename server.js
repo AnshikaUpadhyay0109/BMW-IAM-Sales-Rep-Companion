@@ -180,6 +180,34 @@ app.post("/api/ai/generate", async (req, res) => {
   }
 });
 
+// ── AI: Summarize visit (2-3 sentence dealer card summary) ────────────────
+app.post("/api/ai/summarize-visit", async (req, res) => {
+  try {
+    const { dealerName, topics, notes, actions, challenge, opportunity, status } = req.body || {};
+    const actionsText = (actions || []).map(a => a.text || a.action || a.t).filter(Boolean).join("; ");
+    const userPrompt = [
+      `Dealer: ${dealerName || "Unknown"}`,
+      topics?.length ? `Topics discussed: ${topics.join(", ")}` : "",
+      notes ? `Visit notes: ${notes}` : "",
+      challenge ? `Biggest challenge: ${challenge}` : "",
+      opportunity ? `Biggest opportunity: ${opportunity}` : "",
+      actionsText ? `Actions agreed: ${actionsText}` : "",
+      status ? `Overall visit status: ${status}` : "",
+    ].filter(Boolean).join("\n");
+
+    const reply = await callBedrock({
+      systemPrompt: "You are a BMW IAM sales assistant. Write a concise 2-3 sentence summary of a dealer visit for display on a dashboard card. Focus on the key findings, agreed actions, and dealer status. Be factual and professional. Do not use bullet points or headings — just plain sentences. Do not start with 'The visit' or 'During the visit'.",
+      userPrompt,
+      maxTokens: 150,
+      temperature: 0.3,
+    });
+    res.json({ summary: reply });
+  } catch (err) {
+    console.error("[/api/ai/summarize-visit] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Voice-to-Form Extractor (T067) ─────────────────────────────────────────
 //
 // Turns a free-text visit transcript into a structured, schema-valid draft that
@@ -472,6 +500,10 @@ app.post("/api/ai/transcribe", async (req, res) => {
       LanguageCode: "en-US",            // future: pass from request for multi-language
       MediaFormat:  mediaFormat,
       Media:        { MediaFileUri: `s3://${S3_BUCKET}/${finalAudioKey}` },
+      Settings: {
+        ShowSpeakerLabels: true,
+        MaxSpeakerCount: 5,
+      },
     }));
 
     let transcript = "";
@@ -488,7 +520,37 @@ app.post("/api/ai/transcribe", async (req, res) => {
         const transcriptUri = job.Transcript?.TranscriptFileUri;
         const transcriptRes = await fetch(transcriptUri);
         const data = await transcriptRes.json();
-        transcript = data?.results?.transcripts?.[0]?.transcript || "";
+        // Build speaker-tagged transcript from segments
+        const segments = data?.results?.speaker_labels?.segments;
+        if (segments?.length) {
+          const items = data.results.items || [];
+          let currentSpeaker = null;
+          const parts = [];
+          for (const item of items) {
+            if (item.type === "pronunciation") {
+              const seg = segments.find(s => s.items?.some(si =>
+                si.start_time === item.start_time && si.end_time === item.end_time
+              ));
+              const spk = seg?.items?.find(si =>
+                si.start_time === item.start_time && si.end_time === item.end_time
+              )?.speaker_label;
+              if (spk && spk !== currentSpeaker) {
+                currentSpeaker = spk;
+                parts.push(`\n[${spk}]: `);
+              }
+              parts.push(item.alternatives?.[0]?.content || "");
+              parts.push(" ");
+            } else if (item.type === "punctuation") {
+              // Remove trailing space before punctuation
+              if (parts.length && parts[parts.length - 1] === " ") parts.pop();
+              parts.push(item.alternatives?.[0]?.content || "");
+              parts.push(" ");
+            }
+          }
+          transcript = parts.join("").trim();
+        } else {
+          transcript = data?.results?.transcripts?.[0]?.transcript || "";
+        }
         break;
       }
       if (status === "FAILED") {

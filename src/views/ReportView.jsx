@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '../components/primitives/Icon';
 import { useAppState, useAppDispatch } from '../state/AppStateContext';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { REPS, ME } from '../data/reps';
 import { dealerById } from '../data/dealers';
 import { fmtD, TODAY } from '../utils/formatters';
@@ -9,6 +10,7 @@ import ReportDocument from '../components/report/ReportDocument';
 export function ReportView() {
   const state = useAppState();
   const dispatch = useAppDispatch();
+  const mobile = useIsMobile();
   const lastReport = state.lastViewedReport || state.reports[state.reports.length - 1];
 
   if (!lastReport) {
@@ -16,7 +18,7 @@ export function ReportView() {
       <>
         <div className="top">
           <button className="btn gho sm" onClick={() => dispatch({ type: 'GO_HOME' })}>
-            <Icon name="chev" size={13} style={{ transform: 'rotate(90deg)' }} /> Home
+            {mobile ? '‹' : <><Icon name="chev" size={13} style={{ transform: 'rotate(90deg)' }} /> Home</>}
           </button>
           <div style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>Visit Report</div>
         </div>
@@ -61,15 +63,17 @@ export function ReportView() {
     <>
       <div className="top">
         <button className="btn gho sm" onClick={() => dispatch({ type: 'GO_HOME' })}>
-          <Icon name="chev" size={13} style={{ transform: 'rotate(90deg)' }} /> Home
+          {mobile ? '‹' : '‹ Dealers'}
         </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Visit Report</div>
-          <div style={{ fontSize: 12, color: 'var(--dim)' }}>{dealer.name} · {fmtD(reportDate)}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Visit Report</div>
+          <div style={{ fontSize: 12, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dealer.name} · {fmtD(reportDate)}</div>
         </div>
-        <button className="btn gho sm" onClick={() => window.print()}>
-          <Icon name="download" size={13} /> Print
-        </button>
+        {!mobile && (
+          <button className="btn gho sm" onClick={() => window.print()}>
+            <Icon name="download" size={13} /> Print
+          </button>
+        )}
       </div>
       <div className="scroll">
         <div className="wrap">

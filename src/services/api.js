@@ -196,6 +196,18 @@ export const api = {
     return data.reply;
   },
 
+  // ── AI: Summarize visit (2-3 sentence summary for dealer card) ───────────
+  async summarizeVisit({ dealerName, topics, notes, actions, challenge, opportunity, status }) {
+    const response = await fetch(`${AI_BASE}/api/ai/summarize-visit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dealerName, topics, notes, actions, challenge, opportunity, status }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.summary || null;
+  },
+
   // ── AI: Voice-to-Form Extractor (T067) ───────────────────────────────────
   // Turns a visit transcript into a schema-valid structured draft that maps
   // onto the dealer / IR form fields. Only extracts what the transcript states;

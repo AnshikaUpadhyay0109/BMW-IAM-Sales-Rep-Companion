@@ -66,8 +66,11 @@ export default function StatsGrid() {
   if (movedDown > 0) abcDelta.push(<span key="dn" style={{ color: 'var(--red)' }}>▼ {movedDown} moved down</span>);
   if (!movedUp && !movedDown) abcDelta.push('– no change');
 
-  const visitsDone = ds.filter(d => d.visited).length;
-  const visitsPlanned = rep?.visitsP || ds.length;
+  const visitsDone = ds.filter(d => {
+    const vs = dealerVisitStatus?.[d.code];
+    return vs?.status === 'submitted';
+  }).length;
+  const visitsPlanned = ds.length;
   const visitPct = visitsPlanned ? Math.round((visitsDone / visitsPlanned) * 100) : 0;
 
   return (

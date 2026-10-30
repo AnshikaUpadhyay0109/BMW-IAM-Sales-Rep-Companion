@@ -22,15 +22,17 @@ function ConnectedToast() {
 
 export default function AppShell({ children }) {
   const mobile = useIsMobile();
+  const state = useAppState();
+  const fullScreen = state.view !== 'home';
 
   if (mobile) {
     return (
       <div className="shell m">
-        <MobileTopBar />
+        {!fullScreen && <MobileTopBar />}
         <div className="main">
           {children}
         </div>
-        <MobileTabBar />
+        {!fullScreen && <MobileTabBar />}
         <ConnectedToast />
       </div>
     );

@@ -55,6 +55,7 @@ function AppInner() {
           const extract = (visit) => ({
             code, status: visit.status, visitDate: visit.visit_date || null,
             managerViewed: !!visit.manager_viewed, visitId: visit.visit_id || null,
+            summary: visit.form_data?.visit_summary || null,
           });
 
           // Fetch draft and latest submitted in parallel
@@ -72,7 +73,7 @@ function AppInner() {
         const statuses = {};
         results.forEach(r => {
           if (r.status === 'fulfilled' && r.value) {
-            statuses[r.value.code] = { status: r.value.status, visitDate: r.value.visitDate, managerViewed: r.value.managerViewed, visitId: r.value.visitId };
+            statuses[r.value.code] = { status: r.value.status, visitDate: r.value.visitDate, managerViewed: r.value.managerViewed, visitId: r.value.visitId, summary: r.value.summary };
           }
         });
         if (Object.keys(statuses).length > 0) {

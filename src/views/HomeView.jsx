@@ -118,14 +118,22 @@ export default function HomeView() {
 
   return (
     <>
-      <div className="top">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{title}</div>
-          <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>{subtitle}</div>
+      {!mobile && (
+        <div className="top">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em' }}>{title}</div>
+            <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>{subtitle}</div>
+          </div>
         </div>
-      </div>
+      )}
       <div className="scroll">
         <div className="wrap">
+          {mobile && (
+            <div className="mh">
+              <div className="mh-t">{title}</div>
+              <div className="mh-s">{subtitle}</div>
+            </div>
+          )}
           <StatsGrid />
           {isManager && <RepChips />}
           <SearchBar />

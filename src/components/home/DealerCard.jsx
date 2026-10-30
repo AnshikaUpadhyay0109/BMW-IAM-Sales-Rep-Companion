@@ -145,7 +145,7 @@ export default function DealerCard({ dealer, onViewReport }) {
         <div className="dc-meta">
           <div className="m">
             <span className="ml">Last visit</span>
-            <span className="mv">{d.visited ? 'Visited' : 'No visit yet'}</span>
+            <span className="mv">{isSubmitted && vs?.visitDate ? fmtDM(vs.visitDate) : 'No visit yet'}</span>
           </div>
           {isManager && rep && (
             <div className="m">
@@ -177,42 +177,49 @@ export default function DealerCard({ dealer, onViewReport }) {
         </div>
       )}
 
-      {/* Expanded: full KPI grid + footer */}
+      {/* Expanded: full KPI grid + summary */}
       {open && (
         <>
           <DealerKpis d={d} />
-          {mobile && (
-            <div className="dc-cta-m">
-              {isManager ? (
-                isSubmitted && (
-                  <>
-                    <button className="btn pri sm" onClick={handleViewReport}>
-                      <Icon name="doc" size={14} color="#fff" />
-                      View report
-                    </button>
-                    {isNewReport && (
-                      <span className="pill" style={{ background: 'var(--ac)', color: '#fff', fontSize: 9, padding: '1px 7px', marginTop: 4 }}>
-                        New report
-                      </span>
-                    )}
-                  </>
-                )
-              ) : (
-                <>
-                  <button className="btn pri sm" onClick={e => { e.stopPropagation(); dispatch({ type: 'SELECT_DEALER', dealer: d }); }}>
-                    <Icon name={isDraft ? 'edit' : 'pin'} size={14} color="#fff" />
-                    {isDraft ? 'Resume visit' : 'Start visit'}
-                  </button>
-                  {isSubmitted && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                      Visited {visitDateLabel}
-                    </span>
-                  )}
-                </>
-              )}
+          {isSubmitted && vs?.summary && (
+            <div className="dc-f">
+              <p className="sum">{vs.summary}</p>
             </div>
           )}
         </>
+      )}
+
+      {/* Mobile CTA: always visible (collapsed or expanded) */}
+      {mobile && (
+        <div className="dc-cta-m">
+          {isManager ? (
+            isSubmitted && (
+              <>
+                <button className="btn pri sm" onClick={handleViewReport}>
+                  <Icon name="doc" size={14} color="#fff" />
+                  View report
+                </button>
+                {isNewReport && (
+                  <span className="pill" style={{ background: 'var(--ac)', color: '#fff', fontSize: 9, padding: '1px 7px', marginTop: 4 }}>
+                    New report
+                  </span>
+                )}
+              </>
+            )
+          ) : (
+            <>
+              <button className="btn pri sm" onClick={e => { e.stopPropagation(); dispatch({ type: 'SELECT_DEALER', dealer: d }); }}>
+                <Icon name={isDraft ? 'edit' : 'pin'} size={14} color="#fff" />
+                {isDraft ? 'Resume visit' : 'Start visit'}
+              </button>
+              {isSubmitted && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Visited {visitDateLabel}
+                </span>
+              )}
+            </>
+          )}
+        </div>
       )}
     </article>
   );

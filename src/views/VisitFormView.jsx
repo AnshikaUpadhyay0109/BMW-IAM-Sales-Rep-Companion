@@ -351,7 +351,7 @@ export function VisitFormView() {
 
       <div className="vgrid">
         <div className="scroll" id="scroll">
-          <div className="wrap" style={{ maxWidth: 900 }}>
+          <div className="wrap">
             <div className="tip">
               <Icon name="spark" size={14} color="var(--ac)" />
               The mic starts on its own. Just talk through the visit and each section fills in as it comes up.

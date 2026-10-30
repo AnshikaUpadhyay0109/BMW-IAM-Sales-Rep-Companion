@@ -111,12 +111,13 @@ function reducer(state, action) {
     case 'SAVE_REPORT': {
       const submitCode = state.selectedDealer?.code;
       const today = new Date().toISOString().slice(0, 10);
+      const prevVsSubmit = state.dealerVisitStatus?.[submitCode] || {};
       return {
         ...state,
         reports: [...state.reports, action.report],
         view: 'report',
         dealerVisitStatus: submitCode
-          ? { ...state.dealerVisitStatus, [submitCode]: { status: 'submitted', visitDate: today } }
+          ? { ...state.dealerVisitStatus, [submitCode]: { ...prevVsSubmit, status: 'submitted', visitDate: today, summary: action.summary || prevVsSubmit.summary || null } }
           : state.dealerVisitStatus,
       };
     }
