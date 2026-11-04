@@ -61,26 +61,26 @@ export default function ReportDocument({ report, dealer, draft }) {
 
       <div className="ps">
         <h4>Tools usage</h4>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 11, color: 'var(--dim)', marginBottom: 4 }}>PL24</div>
-            {toolPill(report.pl24)}
-          </div>
-          <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 11, color: 'var(--dim)', marginBottom: 4 }}>AOS</div>
-            {toolPill(report.aos)}
-          </div>
-        </div>
+        <div style={{ fontSize: 11, color: 'var(--dim)', marginBottom: 4 }}>PL24</div>
+        {toolPill(report.pl24)}
       </div>
 
       <div className="ps">
-        <h4>Biggest challenge</h4>
-        {report.challenge ? <p style={{ fontWeight: 500 }}>{report.challenge}</p> : <p className="none">Not captured</p>}
+        <h4>Top Challenges</h4>
+        {report.challenges?.length ? (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {report.challenges.map(c => <span key={c} style={{ padding: '3px 10px', borderRadius: 6, fontSize: 13, fontWeight: 500, background: '#FFF4DC', color: '#A35F00' }}>{c === 'Other' && report.challengeOther ? report.challengeOther : c}</span>)}
+          </div>
+        ) : <p className="none">Not captured</p>}
       </div>
 
       <div className="ps">
-        <h4>Biggest opportunity</h4>
-        {report.opportunity ? <p style={{ fontWeight: 500 }}>{report.opportunity}</p> : <p className="none">Not captured</p>}
+        <h4>Top Opportunities</h4>
+        {report.opportunities?.length ? (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {report.opportunities.map(o => <span key={o} style={{ padding: '3px 10px', borderRadius: 6, fontSize: 13, fontWeight: 500, background: '#E8F7EF', color: '#11834A' }}>{o === 'Other' && report.opportunityOther ? report.opportunityOther : o}</span>)}
+          </div>
+        ) : <p className="none">Not captured</p>}
       </div>
 
       <div className="ps">

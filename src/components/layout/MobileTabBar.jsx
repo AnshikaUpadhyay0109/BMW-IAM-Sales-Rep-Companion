@@ -8,7 +8,7 @@ export default function MobileTabBar() {
   const isManager = state.user?.isManager;
 
   const repTabs = [
-    { id: 'home', icon: 'store', label: 'My dealers', active: true },
+    { id: 'home', icon: 'store', label: 'My Retailers', active: true },
     { id: 'plan', icon: 'zap', label: 'Plan', soon: true },
     { id: 'calendar', icon: 'cal', label: 'Calendar', soon: true },
     { id: 'compare', icon: 'columns', label: 'Compare', soon: true },

@@ -30,9 +30,10 @@ export function VisitReviewView() {
     topics: form.topics,
     notes: form.notes,
     pl24: form.pl24,
-    aos: form.aos,
-    challenge: form.challenge,
-    opportunity: form.opportunity,
+    challenges: form.challenges,
+    challengeOther: form.challengeOther,
+    opportunities: form.opportunities,
+    opportunityOther: form.opportunityOther,
     comp: form.competitors,
     photos: form.photos,
     actions: form.actionItems?.filter(a => a.text?.trim()),
@@ -49,13 +50,14 @@ export function VisitReviewView() {
       ...report,
     };
     const rep = REPS[repId];
+    const fullTranscript = form.fullTranscript || '';
     const visitSummary = await api.summarizeVisit({
       dealerName: dealer.name,
       topics: form.topics,
       notes: form.notes,
       actions: form.actionItems?.filter(a => a.text?.trim()),
-      challenge: form.challenge,
-      opportunity: form.opportunity,
+      challenge: (form.challenges || []).join(', '),
+      opportunity: (form.opportunities || []).join(', '),
       status: form.status,
     }).catch(() => null);
     const payload = {
@@ -71,9 +73,11 @@ export function VisitReviewView() {
         topics_discussed: form.topics,
         other_topic: form.otherTopic || '',
         visit_notes: form.notes,
-        tools_usage: { pl24: form.pl24, aos: form.aos },
-        biggest_challenge: form.challenge,
-        biggest_opportunity: form.opportunity,
+        tools_usage: { pl24: form.pl24 },
+        biggest_challenges: form.challenges || [],
+        biggest_challenge_other: form.challengeOther || '',
+        biggest_opportunities: form.opportunities || [],
+        biggest_opportunity_other: form.opportunityOther || '',
         competitor_activity: {
           mode: form.competitors?.trim() ? 'Observed' : 'Not Observed',
           comment: form.competitors || '',
@@ -83,6 +87,8 @@ export function VisitReviewView() {
         })),
         overall_status: form.status,
         voice_note_key: form.voiceNoteKey || null,
+        overall_transcription: fullTranscript,
+        overall_visit_note: form.visitNoteSummary || '',
         ai_summary: form.aiSummary || '',
         visit_summary: visitSummary || '',
         photos: (form.photos || []).filter(p => p.s3Key).map(p => ({ key: p.s3Key, name: p.name })),

@@ -1,15 +1,23 @@
-export const TOPICS = ['Stock', 'Delivery', 'PL24', 'AOS', 'Marketing', 'Competition', 'Pricing', 'Reporting', 'Q4 Campaign', 'Other'];
+export const TOPICS = ['Stock', 'Delivery', 'PL24', 'Parts Basket', 'Trade Oil', 'Timing Chain Kits', 'Consumables', 'BWIR Principles', 'Local Campaigns', 'Resource', 'Focus Customers', 'MUI', 'Marketing', 'Competition', 'Pricing', 'Reporting', 'NSC Campaign', 'Other'];
 
 export const TOPIC_IC = {
   Stock: 'box',
   Delivery: 'truck',
   PL24: 'tool',
-  AOS: 'mega',
+  'Parts Basket': 'box',
+  'Trade Oil': 'tool',
+  'Timing Chain Kits': 'tool',
+  Consumables: 'box',
+  'BWIR Principles': 'doc',
+  'Local Campaigns': 'mega',
+  Resource: 'users',
+  'Focus Customers': 'target',
+  MUI: 'alert',
   Marketing: 'tag',
   Competition: 'users',
   Pricing: 'euro',
   Reporting: 'doc',
-  'Q4 Campaign': 'mega',
+  'NSC Campaign': 'mega',
   Other: 'dots',
 };
 
@@ -22,6 +30,7 @@ export const CHALLENGES = [
   'Delivery delays',
   'Budget constraints',
   'Seasonal slowdown',
+  'Resources',
 ];
 
 export const OPPS = [

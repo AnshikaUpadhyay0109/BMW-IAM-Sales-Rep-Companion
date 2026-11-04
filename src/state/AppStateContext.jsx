@@ -6,8 +6,10 @@ const DEFAULT_FORM = {
   notes: '',
   pl24: '',
   aos: '',
-  challenge: '',
-  opportunity: '',
+  challenges: [],
+  challengeOther: '',
+  opportunities: [],
+  opportunityOther: '',
   competitors: '',
   photos: [],
   actionItems: [{ text: '', owner: REPS[ME].name, due: '', prio: 'Medium' }],
@@ -17,6 +19,7 @@ const DEFAULT_FORM = {
   voiceNoteKey: null,
   transcriptSegments: [],
   fullTranscript: '',
+  visitNoteSummary: '',
 };
 
 const INITIAL = {

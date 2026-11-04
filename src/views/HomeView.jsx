@@ -39,7 +39,7 @@ export default function HomeView() {
 
   filtered.sort((a, b) => (SIG[a.signal]?.r ?? 2) - (SIG[b.signal]?.r ?? 2) || (ABC_RANK[b.abc] || 0) - (ABC_RANK[a.abc] || 0));
 
-  const title = isManager ? 'Dealer overview' : 'My dealers';
+  const title = isManager ? 'Dealer overview' : 'My Retailers';
   const subtitle = isManager
     ? `Anna Weber · South England + Midlands · ${MONTH_YEAR}`
     : `${rep?.name} · ${rep?.territory} · ${MONTH_YEAR}`;

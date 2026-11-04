@@ -13,7 +13,7 @@ export default function DesktopSidebar() {
   const rep = REPS[user?.repId || ME];
 
   const repNav = [
-    { id: 'dealers', icon: 'store', label: 'My dealers', view: 'home', active: true },
+    { id: 'dealers', icon: 'store', label: 'My Retailers', view: 'home', active: true },
     { id: 'plan', icon: 'zap', label: "Today's plan", soon: true },
     { id: 'calendar', icon: 'cal', label: 'Calendar', soon: true },
     { id: 'compare', icon: 'columns', label: 'Compare', soon: true },

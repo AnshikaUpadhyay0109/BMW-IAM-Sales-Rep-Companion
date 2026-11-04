@@ -208,6 +208,24 @@ app.post("/api/ai/summarize-visit", async (req, res) => {
   }
 });
 
+app.post("/api/ai/summarize-transcript", async (req, res) => {
+  try {
+    const { transcript, dealerName } = req.body || {};
+    if (!transcript) return res.status(400).json({ error: "transcript is required" });
+
+    const reply = await callBedrock({
+      systemPrompt: "You are a BMW IAM sales assistant. Summarize the following multi-speaker visit transcript. For each speaker (Person 1, Person 2, etc.), write one sentence describing what they discussed or said. Keep it concise and factual. Use the format: 'Person 1 discussed... Person 2 mentioned...' Do not use bullet points or headings.",
+      userPrompt: `Dealer: ${dealerName || "Unknown"}\n\nTranscript:\n${transcript}`,
+      maxTokens: 250,
+      temperature: 0.3,
+    });
+    res.json({ summary: reply });
+  } catch (err) {
+    console.error("[/api/ai/summarize-transcript] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Voice-to-Form Extractor (T067) ─────────────────────────────────────────
 //
 // Turns a free-text visit transcript into a structured, schema-valid draft that
@@ -502,7 +520,7 @@ app.post("/api/ai/transcribe", async (req, res) => {
       Media:        { MediaFileUri: `s3://${S3_BUCKET}/${finalAudioKey}` },
       Settings: {
         ShowSpeakerLabels: true,
-        MaxSpeakerCount: 5,
+        MaxSpeakerLabels: 5,
       },
     }));
 
@@ -536,7 +554,8 @@ app.post("/api/ai/transcribe", async (req, res) => {
               )?.speaker_label;
               if (spk && spk !== currentSpeaker) {
                 currentSpeaker = spk;
-                parts.push(`\n[${spk}]: `);
+                const personNum = parseInt(spk.replace("spk_", ""), 10) + 1;
+                parts.push(`\n[Person ${personNum}]: `);
               }
               parts.push(item.alternatives?.[0]?.content || "");
               parts.push(" ");

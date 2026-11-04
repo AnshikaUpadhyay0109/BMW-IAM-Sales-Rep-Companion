@@ -208,6 +208,17 @@ export const api = {
     return data.summary || null;
   },
 
+  async summarizeTranscript({ transcript, dealerName }) {
+    const response = await fetch(`${AI_BASE}/api/ai/summarize-transcript`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript, dealerName }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.summary || null;
+  },
+
   // ── AI: Voice-to-Form Extractor (T067) ───────────────────────────────────
   // Turns a visit transcript into a schema-valid structured draft that maps
   // onto the dealer / IR form fields. Only extracts what the transcript states;

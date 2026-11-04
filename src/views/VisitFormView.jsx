@@ -103,6 +103,65 @@ function SelectField({ value, onChange, options, icon, iconColor, placeholder })
   );
 }
 
+function MultiSelectDropdown({ selected, onChange, options, icon, iconColor, placeholder, max = 3, otherValue, onOtherChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const atMax = selected.length >= max;
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (val) => {
+    if (selected.includes(val)) onChange(selected.filter(v => v !== val));
+    else if (!atMax) onChange([...selected, val]);
+  };
+
+  const allOpts = [...options, 'Other'];
+  const label = selected.length === 0 ? placeholder : selected.map(s => s === 'Other' && otherValue ? otherValue : s).join(', ');
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div className="selw" onClick={() => setOpen(!open)} style={{ cursor: 'pointer' }}>
+        <Icon name={icon} size={14} color={iconColor} />
+        <div className="sel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none', color: selected.length ? 'var(--ink)' : 'var(--dim)' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label}</span>
+          <span style={{ fontSize: 10, color: 'var(--dim)', flexShrink: 0, marginLeft: 8 }}>{selected.length}/{max}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="msd-drop">
+          {atMax && (
+            <div className="msd-max">Maximum {max} selections reached</div>
+          )}
+          {allOpts.map(o => {
+            const checked = selected.includes(o);
+            const disabled = !checked && atMax;
+            return (
+              <label key={o} className={`msd-opt${checked ? ' on' : ''}${disabled ? ' dis' : ''}`} onClick={() => !disabled && toggle(o)}>
+                <span className={`msd-cb${checked ? ' on' : ''}`}>{checked ? '✓' : ''}</span>
+                {o}
+              </label>
+            );
+          })}
+          {selected.includes('Other') && (
+            <input
+              className="inp bg"
+              style={{ margin: '6px 8px', width: 'calc(100% - 16px)', fontSize: 12.5 }}
+              placeholder="Specify other…"
+              value={otherValue || ''}
+              onChange={e => onOtherChange(e.target.value)}
+              onClick={e => e.stopPropagation()}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function VisitFormView() {
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -116,6 +175,8 @@ export function VisitFormView() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const [visitNoteSummary, setVisitNoteSummary] = useState('');
+  const [isSummarizingTranscript, setIsSummarizingTranscript] = useState(false);
   const fileRef = useRef(null);
   const notesRef = useRef(null);
   const transcriptTextRef = useRef('');
@@ -138,8 +199,10 @@ export function VisitFormView() {
           const fd = visit.form_data || {};
           if (fd.topics_discussed?.length) dispatch({ type: 'SET_FORM_FIELD', field: 'topics', value: fd.topics_discussed });
           if (fd.visit_notes) dispatch({ type: 'SET_FORM_FIELD', field: 'notes', value: fd.visit_notes });
-          if (fd.biggest_challenge) dispatch({ type: 'SET_FORM_FIELD', field: 'challenge', value: fd.biggest_challenge });
-          if (fd.biggest_opportunity) dispatch({ type: 'SET_FORM_FIELD', field: 'opportunity', value: fd.biggest_opportunity });
+          if (fd.biggest_challenges?.length) dispatch({ type: 'SET_FORM_FIELD', field: 'challenges', value: fd.biggest_challenges });
+          if (fd.biggest_challenge_other) dispatch({ type: 'SET_FORM_FIELD', field: 'challengeOther', value: fd.biggest_challenge_other });
+          if (fd.biggest_opportunities?.length) dispatch({ type: 'SET_FORM_FIELD', field: 'opportunities', value: fd.biggest_opportunities });
+          if (fd.biggest_opportunity_other) dispatch({ type: 'SET_FORM_FIELD', field: 'opportunityOther', value: fd.biggest_opportunity_other });
           if (fd.tools_usage?.pl24) dispatch({ type: 'SET_FORM_FIELD', field: 'pl24', value: fd.tools_usage.pl24 });
           if (fd.tools_usage?.aos) dispatch({ type: 'SET_FORM_FIELD', field: 'aos', value: fd.tools_usage.aos });
           if (fd.overall_status) dispatch({ type: 'SET_FORM_FIELD', field: 'status', value: fd.overall_status });
@@ -158,6 +221,10 @@ export function VisitFormView() {
             transcriptTextRef.current = fd.transcript.full_transcription;
             dispatch({ type: 'SET_FORM_FIELD', field: 'fullTranscript', value: fd.transcript.full_transcription });
           }
+          if (fd.overall_visit_note) {
+            setVisitNoteSummary(fd.overall_visit_note);
+            dispatch({ type: 'SET_FORM_FIELD', field: 'visitNoteSummary', value: fd.overall_visit_note });
+          }
         } else {
           dispatch({ type: 'SET_FORM_FIELD', field: 'visitId', value: crypto.randomUUID() });
         }
@@ -174,8 +241,8 @@ export function VisitFormView() {
       const merged = Array.from(new Set([...(form.topics || []), ...ex.topics_discussed]));
       dispatch({ type: 'SET_FORM_FIELD', field: 'topics', value: merged });
     }
-    if (ex.biggest_challenge) dispatch({ type: 'SET_FORM_FIELD', field: 'challenge', value: ex.biggest_challenge });
-    if (ex.biggest_opportunity) dispatch({ type: 'SET_FORM_FIELD', field: 'opportunity', value: ex.biggest_opportunity });
+    if (ex.biggest_challenge) dispatch({ type: 'SET_FORM_FIELD', field: 'challenges', value: [ex.biggest_challenge].slice(0, 3) });
+    if (ex.biggest_opportunity) dispatch({ type: 'SET_FORM_FIELD', field: 'opportunities', value: [ex.biggest_opportunity].slice(0, 3) });
     if (ex.tools_usage?.pl24) dispatch({ type: 'SET_FORM_FIELD', field: 'pl24', value: ex.tools_usage.pl24 });
     if (ex.tools_usage?.aos) dispatch({ type: 'SET_FORM_FIELD', field: 'aos', value: ex.tools_usage.aos });
     if (ex.overall_status) dispatch({ type: 'SET_FORM_FIELD', field: 'status', value: ex.overall_status });
@@ -224,6 +291,28 @@ export function VisitFormView() {
     onAudioStored,
   });
 
+  const wasTranscribing = useRef(false);
+  useEffect(() => {
+    if (isTranscribing) {
+      wasTranscribing.current = true;
+    } else if (wasTranscribing.current) {
+      wasTranscribing.current = false;
+      const text = transcriptTextRef.current;
+      if (text?.trim()) {
+        setIsSummarizingTranscript(true);
+        api.summarizeTranscript({ transcript: text, dealerName: dealer?.name })
+          .then(summary => {
+            if (summary) {
+              setVisitNoteSummary(summary);
+              dispatch({ type: 'SET_FORM_FIELD', field: 'visitNoteSummary', value: summary });
+            }
+          })
+          .catch(() => {})
+          .finally(() => setIsSummarizingTranscript(false));
+      }
+    }
+  }, [isTranscribing, dealer?.name, dispatch]);
+
   const micBusy = isTranscribing || isExtracting;
 
   if (!dealer) return null;
@@ -251,9 +340,11 @@ export function VisitFormView() {
       topics_discussed: form.topics,
       other_topic: form.otherTopic || '',
       visit_notes: form.notes,
-      tools_usage: { pl24: form.pl24, aos: form.aos },
-      biggest_challenge: form.challenge,
-      biggest_opportunity: form.opportunity,
+      tools_usage: { pl24: form.pl24 },
+      biggest_challenges: form.challenges || [],
+      biggest_challenge_other: form.challengeOther || '',
+      biggest_opportunities: form.opportunities || [],
+      biggest_opportunity_other: form.opportunityOther || '',
       competitor_activity: {
         mode: form.competitors?.trim() ? 'Observed' : 'Not Observed',
         comment: form.competitors || '',
@@ -267,6 +358,8 @@ export function VisitFormView() {
         full_transcription: transcriptTextRef.current,
         segments: transcriptSegments,
       },
+      overall_transcription: transcriptTextRef.current,
+      overall_visit_note: visitNoteSummary || '',
       ai_summary: form.aiSummary || '',
       photos: (form.photos || []).filter(p => p.s3Key).map(p => ({ key: p.s3Key, name: p.name })),
     },
@@ -300,7 +393,7 @@ export function VisitFormView() {
       }
     }, 5000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [form.notes, form.topics, form.pl24, form.aos, form.challenge, form.opportunity, form.competitors, form.status, form.actionItems]);
+  }, [form.notes, form.topics, form.pl24, form.challenges, form.opportunities, form.competitors, form.status, form.actionItems]);
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
@@ -312,7 +405,7 @@ export function VisitFormView() {
     try {
       const summary = await api.generate({
         systemPrompt: 'You are a BMW IAM visit report assistant. Generate a concise professional visit summary.',
-        userPrompt: `Dealer: ${dealer.name} (${dealer.code}). Topics: ${form.topics.join(', ')}. Notes: ${form.notes}. Challenge: ${form.challenge || ''}. Opportunity: ${form.opportunity || ''}. PL24: ${form.pl24 || ''}. AOS: ${form.aos || ''}. Status: ${form.status}.`,
+        userPrompt: `Dealer: ${dealer.name} (${dealer.code}). Topics: ${form.topics.join(', ')}. Notes: ${form.notes}. Challenges: ${(form.challenges || []).join(', ')}. Opportunities: ${(form.opportunities || []).join(', ')}. PL24: ${form.pl24 || ''}. Status: ${form.status}.`,
         maxTokens: 300,
       });
       setField('aiSummary', summary);
@@ -411,40 +504,54 @@ export function VisitFormView() {
               </div>
             </FormCard>
 
-            {/* 3. Tools usage */}
-            <FormCard id="tools" num={3} title="Tools usage" subtitle="How is the dealer using PL24 and AOS?">
-              <div className="two">
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>PL24</div>
-                  <OptGroup options={TOOLS_OPTS} value={form.pl24 || ''} onChange={v => setField('pl24', v)} />
+            {(visitNoteSummary || isSummarizingTranscript) && (
+              <div className="card" style={{ padding: '14px 18px', background: 'rgba(161,0,255,.04)', border: '1px solid rgba(161,0,255,.12)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ac)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>
+                  Overall Visit Note
                 </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>AOS</div>
-                  <OptGroup options={TOOLS_OPTS} value={form.aos || ''} onChange={v => setField('aos', v)} />
-                </div>
+                {isSummarizingTranscript ? (
+                  <span style={{ fontSize: 13, color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="spin" style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(161,0,255,.2)', borderTopColor: 'var(--ac)', display: 'inline-block' }} />
+                    Generating visit summary from transcript…
+                  </span>
+                ) : (
+                  <p style={{ fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink)', margin: 0 }}>{visitNoteSummary}</p>
+                )}
               </div>
+            )}
+
+            {/* 3. Tools usage */}
+            <FormCard id="tools" num={3} title="Tools usage" subtitle="How is the dealer using PL24?">
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>PL24</div>
+              <OptGroup options={TOOLS_OPTS} value={form.pl24 || ''} onChange={v => setField('pl24', v)} />
             </FormCard>
 
             {/* 4 & 5. Challenge + Opportunity side by side */}
             <div className="two">
-              <FormCard id="challenge" num={4} title="Biggest challenge" subtitle="What is holding the dealer back?">
-                <SelectField
-                  value={form.challenge || ''}
-                  onChange={v => setField('challenge', v)}
+              <FormCard id="challenge" num={4} title="Top 3 Challenges" subtitle="Select up to 3.">
+                <MultiSelectDropdown
+                  selected={form.challenges || []}
+                  onChange={v => setField('challenges', v)}
                   options={CHALLENGES}
                   icon="alert"
                   iconColor="var(--amber)"
-                  placeholder="Select challenge…"
+                  placeholder="Select challenges…"
+                  max={3}
+                  otherValue={form.challengeOther || ''}
+                  onOtherChange={v => setField('challengeOther', v)}
                 />
               </FormCard>
-              <FormCard id="opportunity" num={5} title="Biggest opportunity" subtitle="Where is the best upside?">
-                <SelectField
-                  value={form.opportunity || ''}
-                  onChange={v => setField('opportunity', v)}
+              <FormCard id="opportunity" num={5} title="Top 3 Opportunities" subtitle="Select up to 3.">
+                <MultiSelectDropdown
+                  selected={form.opportunities || []}
+                  onChange={v => setField('opportunities', v)}
                   options={OPPS}
                   icon="trend"
                   iconColor="var(--green)"
-                  placeholder="Select opportunity…"
+                  placeholder="Select opportunities…"
+                  max={3}
+                  otherValue={form.opportunityOther || ''}
+                  onOtherChange={v => setField('opportunityOther', v)}
                 />
               </FormCard>
             </div>
@@ -611,8 +718,8 @@ export function VisitFormView() {
               ['topics', 'Discussion topics', form.topics.length > 0],
               ['notes', 'Visit notes', !!form.notes?.trim()],
               ['tools', 'Tools usage', !!(form.pl24 && form.aos)],
-              ['challenge', 'Biggest challenge', !!form.challenge],
-              ['opportunity', 'Biggest opportunity', !!form.opportunity],
+              ['challenge', 'Top challenges', (form.challenges || []).length > 0],
+              ['opportunity', 'Top opportunities', (form.opportunities || []).length > 0],
               ['comp', 'Competitor activity', !!form.competitors?.trim()],
               ['actions', 'Actions agreed', form.actionItems.some(a => a.text?.trim())],
               ['status', 'Visit status', !!form.status],
