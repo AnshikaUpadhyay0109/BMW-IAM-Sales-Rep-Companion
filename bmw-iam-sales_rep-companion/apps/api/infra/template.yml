@@ -1,0 +1,843 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: DIBMW Dealer Analytics — 3-query parallel pipeline + REST API
+
+# ── Parameters ────────────────────────────────────────────────────────────────
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+  AthenaDatabase:
+    Type: String
+    Default: dibmw-dev-sellout
+
+  S3OutputLocation:
+    Type: String
+    Default: s3://dibmw-dev-athena-results-bucket/results/
+
+  ResultsBucket:
+    Type: String
+    Default: dibmw-dev-athena-results-bucket
+
+  CuratedBucket:
+    Type: String
+    Default: dibmw-dev-curated-bucket
+
+  SnsTopicArn:
+    Type: String
+    Default: ""   # provide at deploy time: arn:aws:sns:eu-central-1:<account>:<topic>
+
+  BedrockModelId:
+    Type: String
+    Default: "arn:aws:bedrock:eu-central-1:245439046166:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+    Description: "Bedrock inference profile ARN for EU cross-region Haiku"
+
+
+# ── Globals ───────────────────────────────────────────────────────────────────
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowOrigin:  "'*'"
+
+  Function:
+    Runtime: python3.13
+    Timeout: 900          # 15 min (Lambda max) — poll limit must stay within this
+    MemorySize: 256
+    Architectures: [arm64]
+    Layers:
+      - !Ref SharedLayer
+    Environment:
+      Variables:
+        STAGE:              !Ref Stage
+        ATHENA_DATABASE:    !Ref AthenaDatabase
+        ATHENA_REGION:      eu-central-1
+        S3_OUTPUT_LOCATION: !Ref S3OutputLocation
+        ATHENA_WORKGROUP:   dibmw-benchmark-metadata
+        RESULTS_BUCKET:     !Ref ResultsBucket
+        SNS_TOPIC_ARN:      !Ref SnsTopicArn
+        PROCESSED_PREFIX:   processed/
+        DEALER_TABLE_NAME:  !Sub dibmw-dealer-cache-${Stage}
+        VISIT_CAPTURE_TABLE_NAME: !Sub bmw_visit_capture-${Stage}
+        POLL_INTERVAL_SEC:  "5"
+        MAX_POLL_ATTEMPTS:  "170"
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── Lambda Layer (shared code) ─────────────────────────────────────────────
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub dibmw-shared-${Stage}
+      Description: Shared config + utils for all DIBMW Lambda functions
+      ContentUri: ../shared/
+      CompatibleRuntimes: [python3.13]
+      RetentionPolicy: Delete
+
+  # ── Function 1: ABC Dealer Segmentation ───────────────────────────────────
+  ABCSegmentationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-abc-segmentation-${Stage}
+      CodeUri: ../functions/abc_segmentation/
+      Handler: handler.lambda_handler
+      Description: Runs QTD dealer achievement SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 2: MoM Parts Category Decline ────────────────────────────────
+  MoMDeclineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-mom-decline-${Stage}
+      CodeUri: ../functions/mom_decline/
+      Handler: handler.lambda_handler
+      Description: Runs MoM parts category decline SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 3: YoY Parts Category Comparison ─────────────────────────────
+  YoYComparisonFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-yoy-comparison-${Stage}
+      CodeUri: ../functions/yoy_comparison/
+      Handler: handler.lambda_handler
+      Description: Runs YoY parts category comparison SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 4: YoY MTD Revenue Comparison ───────────────────────────────
+  RevenueYoYFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-revenue-yoy-${Stage}
+      CodeUri: ../functions/revenue_yoy/
+      Handler: handler.lambda_handler
+      Description: Runs CY vs LY MTD revenue comparison SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 5a: Sale Revenue vs Target ──────────────────────────────────
+  SaleRevenueVsTargetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-sale-revenue-vs-target-${Stage}
+      CodeUri: ../functions/sale_revenue_vs_target/
+      Handler: handler.lambda_handler
+      Description: Runs sales actual vs target SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 5b: Purchase Revenue vs Target ───────────────────────────────
+  PurchaseRevenueVsTargetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-purchase-revenue-vs-target-${Stage}
+      CodeUri: ../functions/purchase_revenue_vs_target/
+      Handler: handler.lambda_handler
+      Description: Runs purchase actual vs target SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 5c: High Turnover Low Activity ──────────────────────────────
+  HighTurnoverLowActivityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-high-turnover-low-activity-${Stage}
+      CodeUri: ../functions/high_turnover_low_activity/
+      Handler: handler.lambda_handler
+      Description: Flags dealers with high turnover but low invoice frequency or poor recency
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 7: Comp Customer Count (YoY same-month comparison) ─────────
+  CompCustomerCountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-comp-customer-count-${Stage}
+      CodeUri: ../functions/comp_customer_count/
+      Handler: handler.lambda_handler
+      Description: Compares current-month customer count vs same month last year; health-tags by country NTILE
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function: Market Basket UK IR ────────────────────────────────────────
+  MarketBasketUkIrFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-market-basket-uk-ir-${Stage}
+      CodeUri: ../functions/market_basket_uk_ir/
+      Handler: handler.lambda_handler
+      Description: Reads market_basket_below_benchmark_uk_ir CTAS table; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: !Ref ResultsBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function: Parts Category Mix Benchmark ────────────────────────────────
+  PartsCategoryMixBenchmarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-parts-category-mix-benchmark-${Stage}
+      CodeUri: ../functions/parts_category_mix_benchmark/
+      Handler: handler.lambda_handler
+      Description: Reads parts_category_mix_benchmark_uk_ir CTAS table; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: !Ref ResultsBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── Function 6: Customer Count Trend ─────────────────────────────────────
+  CustomerTrendFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-customer-trend-${Stage}
+      CodeUri: ../functions/customer_trend/
+      Handler: handler.lambda_handler
+      Description: Runs monthly customer count trend SQL against Athena; returns S3 CSV path
+      Policies:
+        - AmazonAthenaFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref CuratedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt, kms:GenerateDataKey]
+              Resource: "*"
+
+  # ── DynamoDB Table 1: per-dealer KPI cache (swept/overwritten each run) ───
+  DealerCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub dibmw-dealer-cache-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: dealer_code
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: dealer_code
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  # ── DynamoDB Table 2: shared visit capture (frontend visit form) ───────────
+  VisitCaptureTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub bmw_visit_capture-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: dealer_code
+          AttributeType: S
+        - AttributeName: visit_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: dealer_code
+          KeyType: HASH
+        - AttributeName: visit_id
+          KeyType: RANGE
+
+  # ── Function 4: Result Aggregator ─────────────────────────────────────────
+  ResultAggregatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-result-aggregator-${Stage}
+      CodeUri: ../functions/result_aggregator/
+      Handler: handler.lambda_handler
+      Description: Reads all 3 Athena CSVs, writes S3 archive + per-dealer DynamoDB items
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ResultsBucket
+        - S3WritePolicy:
+            BucketName: !Ref ResultsBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DealerCacheTable
+
+  # ── Function: Insights Generator ──────────────────────────────────────────
+  InsightsGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-insights-generator-${Stage}
+      CodeUri: ../functions/insights_generator/
+      Handler: handler.lambda_handler
+      Description: Generates AI insights (top_issues, summary, pitch) via Bedrock; caches in DynamoDB
+      Timeout: 90
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DealerCacheTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref VisitCaptureTable
+        - Statement:
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ResultsBucket}/results/benchmark/*"
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !Sub "arn:aws:s3:::${ResultsBucket}"
+              Condition:
+                StringLike:
+                  s3:prefix: "results/benchmark/*"
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                # EU Haiku 4.5 inference profile (entry point)
+                - !Sub "arn:aws:bedrock:eu-central-1:${AWS::AccountId}:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+                # Foundation models in each region the profile routes to
+                - "arn:aws:bedrock:eu-central-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                - "arn:aws:bedrock:eu-north-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                - "arn:aws:bedrock:eu-west-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                - "arn:aws:bedrock:eu-west-3::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                - "arn:aws:bedrock:eu-south-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                - "arn:aws:bedrock:eu-south-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+
+  # ── Function 5: Report Dispatcher ─────────────────────────────────────────
+  ReportDispatcherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-report-dispatcher-${Stage}
+      CodeUri: ../functions/report_dispatcher/
+      Handler: handler.lambda_handler
+      Description: Reads combined JSON, builds 3-section report, publishes to SNS
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ResultsBucket
+        - Statement:
+            - Effect: Allow
+              Action: sns:Publish
+              Resource: "*"   # scope to !Ref SnsTopicArn once the topic exists
+
+  # ── Function 6: API Handler ────────────────────────────────────────────────
+  ApiHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-api-handler-${Stage}
+      CodeUri: ../functions/api_handler/
+      Handler: handler.lambda_handler
+      Description: REST API — reads latest S3 results and optionally triggers the pipeline
+      Timeout: 30       # 30s covers cache-miss Bedrock calls; API Gateway hard limit is 29s
+      Environment:
+        Variables:
+          PIPELINE_ARN:           !GetAtt AnalyticsPipeline.Arn
+          API_ROOT_PATH:          /Prod
+          INSIGHTS_GENERATOR_ARN: !GetAtt InsightsGeneratorFunction.Arn
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ResultsBucket
+        - DynamoDBReadPolicy:
+            TableName: !Ref DealerCacheTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref InsightsGeneratorFunction
+        - Statement:
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !GetAtt AnalyticsPipeline.Arn
+      Events:
+        GetAllDealers:
+          Type: Api
+          Properties:
+            Path: /dealers
+            Method: GET
+        GetDealer:
+          Type: Api
+          Properties:
+            Path: /dealers/{dealer_code}
+            Method: GET
+        GetDealerInsights:
+          Type: Api
+          Properties:
+            Path: /dealers/{dealer_code}/insights
+            Method: GET
+        GetAll:
+          Type: Api
+          Properties:
+            Path: /results
+            Method: GET
+        GetABC:
+          Type: Api
+          Properties:
+            Path: /results/abc-segmentation
+            Method: GET
+        GetMoM:
+          Type: Api
+          Properties:
+            Path: /results/mom-decline
+            Method: GET
+        GetYoY:
+          Type: Api
+          Properties:
+            Path: /results/yoy-comparison
+            Method: GET
+        GetRevenueYoY:
+          Type: Api
+          Properties:
+            Path: /results/revenue-yoy
+            Method: GET
+        GetCustomerTrend:
+          Type: Api
+          Properties:
+            Path: /results/customer-trend
+            Method: GET
+        GetHighTurnoverLowActivity:
+          Type: Api
+          Properties:
+            Path: /results/high-turnover-low-activity
+            Method: GET
+        GetSaleRevenueVsTarget:
+          Type: Api
+          Properties:
+            Path: /results/sale-revenue-vs-target
+            Method: GET
+        GetPurchaseRevenueVsTarget:
+          Type: Api
+          Properties:
+            Path: /results/purchase-revenue-vs-target
+            Method: GET
+        TriggerPipeline:
+          Type: Api
+          Properties:
+            Path: /trigger
+            Method: POST
+        ProxyAll:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+  # ── Function: Get Draft Visit Capture ────────────────────────────────────
+  GetDraftVisitCaptureFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-get-draft-visit-capture-${Stage}
+      CodeUri: ../functions/get_draft_visit_capture/
+      Handler: handler.lambda_handler
+      Description: Returns the latest draft from bmw_visit_capture for a dealer (or null if none)
+      Timeout: 30
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref VisitCaptureTable
+      Events:
+        GetDraftVisitCapture:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/draft
+            Method: GET
+        GetDraftVisitCaptureOptions:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/draft
+            Method: OPTIONS
+
+  # ── Function: Save / Submit Visit Capture ────────────────────────────────
+  SaveVisitCaptureFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-save-visit-capture-${Stage}
+      CodeUri: ../functions/save_visit_capture/
+      Handler: handler.lambda_handler
+      Description: Upserts a shared visit capture form (draft or submitted) into bmw_visit_capture
+      Timeout: 30
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref VisitCaptureTable
+      Events:
+        SaveVisitCapture:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/{visit_id}
+            Method: PUT
+        PatchVisitCapture:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/{visit_id}
+            Method: PATCH
+        SaveVisitCaptureOptions:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/{visit_id}
+            Method: OPTIONS
+
+  # ── Function: Search Visit Capture ───────────────────────────────────────
+  SearchVisitCaptureFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub dibmw-search-visit-capture-${Stage}
+      CodeUri: ../functions/search_visit_capture/
+      Handler: handler.lambda_handler
+      Description: Searches bmw_visit_capture by dealer_code + optional form_type and visit_date
+      Timeout: 30
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref VisitCaptureTable
+      Events:
+        SearchVisitCapture:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/search
+            Method: GET
+        SearchVisitCaptureOptions:
+          Type: Api
+          Properties:
+            Path: /visit-capture/{dealer_code}/search
+            Method: OPTIONS
+
+  # ── Step Functions: Parallel pipeline ─────────────────────────────────────
+  AnalyticsPipeline:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub dibmw-analytics-pipeline-${Stage}
+      Definition:
+        Comment: "Runs 3 Athena queries in parallel → aggregates → dispatches report"
+        StartAt: RunQueriesInParallel
+        States:
+
+          # All 3 query Lambdas fire simultaneously; Step Functions waits for all
+          RunQueriesInParallel:
+            Type: Parallel
+            Branches:
+              - StartAt: ABCSegmentation
+                States:
+                  ABCSegmentation:
+                    Type: Task
+                    Resource: !GetAtt ABCSegmentationFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: MoMDecline
+                States:
+                  MoMDecline:
+                    Type: Task
+                    Resource: !GetAtt MoMDeclineFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: YoYComparison
+                States:
+                  YoYComparison:
+                    Type: Task
+                    Resource: !GetAtt YoYComparisonFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: RevenueYoY
+                States:
+                  RevenueYoY:
+                    Type: Task
+                    Resource: !GetAtt RevenueYoYFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: CustomerTrend
+                States:
+                  CustomerTrend:
+                    Type: Task
+                    Resource: !GetAtt CustomerTrendFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: HighTurnoverLowActivity
+                States:
+                  HighTurnoverLowActivity:
+                    Type: Task
+                    Resource: !GetAtt HighTurnoverLowActivityFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: SaleRevenueVsTarget
+                States:
+                  SaleRevenueVsTarget:
+                    Type: Task
+                    Resource: !GetAtt SaleRevenueVsTargetFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: PurchaseRevenueVsTarget
+                States:
+                  PurchaseRevenueVsTarget:
+                    Type: Task
+                    Resource: !GetAtt PurchaseRevenueVsTargetFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: CompCustomerCount
+                States:
+                  CompCustomerCount:
+                    Type: Task
+                    Resource: !GetAtt CompCustomerCountFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: MarketBasketUkIr
+                States:
+                  MarketBasketUkIr:
+                    Type: Task
+                    Resource: !GetAtt MarketBasketUkIrFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+              - StartAt: PartsCategoryMixBenchmark
+                States:
+                  PartsCategoryMixBenchmark:
+                    Type: Task
+                    Resource: !GetAtt PartsCategoryMixBenchmarkFunction.Arn
+                    End: true
+                    Retry:
+                      - ErrorEquals: [States.TaskFailed]
+                        IntervalSeconds: 5
+                        MaxAttempts: 2
+                        BackoffRate: 2
+            # Output: ordered array of branch results → input to ResultAggregator
+            Catch:
+              - ErrorEquals: [States.ALL]
+                Next: PipelineFailed
+            Next: ResultAggregator
+
+          ResultAggregator:
+            Type: Task
+            Resource: !GetAtt ResultAggregatorFunction.Arn
+            Next: ReportDispatcher
+            Retry:
+              - ErrorEquals: [States.TaskFailed]
+                IntervalSeconds: 5
+                MaxAttempts: 2
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals: [States.ALL]
+                Next: PipelineFailed
+
+          ReportDispatcher:
+            Type: Task
+            Resource: !GetAtt ReportDispatcherFunction.Arn
+            End: true
+            Retry:
+              - ErrorEquals: [States.TaskFailed]
+                IntervalSeconds: 5
+                MaxAttempts: 2
+                BackoffRate: 2
+            Catch:
+              - ErrorEquals: [States.ALL]
+                Next: PipelineFailed
+
+          PipelineFailed:
+            Type: Fail
+            Error: PipelineError
+            Cause: "One or more pipeline steps failed — check CloudWatch Logs"
+
+      # Step Functions needs permission to invoke all 5 Lambdas
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ABCSegmentationFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref MoMDeclineFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref YoYComparisonFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RevenueYoYFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CustomerTrendFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref HighTurnoverLowActivityFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SaleRevenueVsTargetFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PurchaseRevenueVsTargetFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CompCustomerCountFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref MarketBasketUkIrFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PartsCategoryMixBenchmarkFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ResultAggregatorFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ReportDispatcherFunction
+
+  # ── EventBridge: trigger pipeline every weekday at 07:00 UTC ──────────────
+  DailySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub dibmw-analytics-daily-${Stage}
+      State: DISABLED
+      ScheduleExpression: "cron(0 7 ? * MON-FRI *)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt AnalyticsPipeline.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: "{}"
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartExecution
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !GetAtt AnalyticsPipeline.Arn
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+Outputs:
+  ApiBaseUrl:
+    Description: "Base URL for the REST API — paste this into your frontend"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+
+  DealerCacheTableName:
+    Description: "DynamoDB table — query by dealer_code for instant per-dealer lookup"
+    Value: !Ref DealerCacheTable
+
+  ABCSegmentationArn:
+    Value: !GetAtt ABCSegmentationFunction.Arn
+  MoMDeclineArn:
+    Value: !GetAtt MoMDeclineFunction.Arn
+  YoYComparisonArn:
+    Value: !GetAtt YoYComparisonFunction.Arn
+  ResultAggregatorArn:
+    Value: !GetAtt ResultAggregatorFunction.Arn
+  ReportDispatcherArn:
+    Value: !GetAtt ReportDispatcherFunction.Arn
+  PipelineArn:
+    Value: !GetAtt AnalyticsPipeline.Arn
+  InsightsGeneratorArn:
+    Value: !GetAtt InsightsGeneratorFunction.Arn
+
+  VisitCaptureTableName:
+    Description: "DynamoDB table — shared visit capture form (bmw_visit_capture)"
+    Value: !Ref VisitCaptureTable
+  GetDraftVisitCaptureArn:
+    Value: !GetAtt GetDraftVisitCaptureFunction.Arn
+  SaveVisitCaptureArn:
+    Value: !GetAtt SaveVisitCaptureFunction.Arn
+  SearchVisitCaptureArn:
+    Value: !GetAtt SearchVisitCaptureFunction.Arn
