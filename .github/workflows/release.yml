@@ -1,0 +1,8 @@
+# Placeholder — will tag releases and deploy to staging/prod
+name: Release
+on: workflow_dispatch
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO"

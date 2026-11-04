@@ -1,0 +1,8 @@
+# Placeholder — will run lint, test, and build on PRs
+name: PR Checks
+on: workflow_dispatch
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO"
