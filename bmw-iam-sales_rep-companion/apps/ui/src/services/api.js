@@ -280,23 +280,7 @@ export const api = {
     return request(`/dealers/${code}/insights`);
   },
 
-  // ── Visit Forms (existing) ────────────────────────────────────────────────
-  async getDraftVisit(dealerCode, formType) {
-    return request(`/visits/${dealerCode}/draft?form_type=${formType}`);
-  },
-
-  async saveVisit(dealerCode, visitId, payload) {
-    return request(`/visits/${dealerCode}/${visitId}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async getVisitByDate(dealerCode, formType, visitDate) {
-    return request(`/visits/${dealerCode}/search?form_type=${formType}&visit_date=${visitDate}`);
-  },
-
-  // ── Visit Capture (new forms) ─────────────────────────────────────────────
+  // ── Visit Capture ─────────────────────────────────────────────────────────
   async getDraftVisitCapture(dealerCode, formType) {
     return request(`/visit-capture/${dealerCode}/draft?form_type=${formType}`);
   },
