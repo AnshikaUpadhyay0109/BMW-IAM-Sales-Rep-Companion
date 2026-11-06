@@ -88,8 +88,16 @@ base AS (
        AND sd.year = tm.yr
        AND sd.month = tm.mo
 
-    LEFT JOIN "dibmw-dev-sellout"."sellout_view" s
-        ON s.dealer_code = dm.dealer_code
+    LEFT JOIN (
+            SELECT dealer_code,
+                   MAX(country) AS country,
+                   MAX(dealer_master_country) AS dealer_master_country,
+                   MAX(region) AS region,
+                   MAX(dealer_city) AS dealer_city,
+                   MAX(district_area) AS district_area
+            FROM "dibmw-prod-sellout"."sellout_view_v2"
+            GROUP BY dealer_code
+        ) s ON s.dealer_code = dm.dealer_code
 
     GROUP BY
           dm.dealer_code

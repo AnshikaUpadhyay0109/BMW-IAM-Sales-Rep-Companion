@@ -303,7 +303,7 @@ base AS (
                     AND invoice_date < ly_month_end
                    THEN coalesce(net_amount, sales_actual) ELSE 0 END) AS Unknown_LY
 
-    FROM "dibmw-dev-sellout"."sellout_view"
+    FROM "dibmw-prod-sellout"."sellout_view_v2"
     CROSS JOIN params
 
     GROUP BY dealer_code

@@ -39,7 +39,7 @@ monthly_counts AS (
         tm.pos,
         COUNT(DISTINCT sv.customer_code) AS customer_count
     FROM target_months tm
-    LEFT JOIN "dibmw-dev-sellout"."sellout_view" sv
+    LEFT JOIN "dibmw-prod-sellout"."sellout_view_v2" sv
         ON YEAR(sv.invoice_date) = tm.yr
        AND MONTH(sv.invoice_date) = tm.mo
     GROUP BY
@@ -127,7 +127,7 @@ SELECT DISTINCT
     , s.dealer_city
     , s.district_area
 FROM finaldata f
-LEFT JOIN "dibmw-dev-sellout"."sellout_view" s
+LEFT JOIN "dibmw-prod-sellout"."sellout_view_v2" s
     ON s.dealer_code = f.dealer_code
 WHERE s.region IN ('UK IR')
 ORDER BY f.dealer_code;

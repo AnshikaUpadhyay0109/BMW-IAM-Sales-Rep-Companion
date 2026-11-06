@@ -110,6 +110,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:
@@ -129,6 +131,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:
@@ -167,6 +171,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:
@@ -186,6 +192,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:
@@ -205,6 +213,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:
@@ -224,6 +234,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:
@@ -285,6 +297,8 @@ Resources:
         - AmazonAthenaFullAccess
         - S3ReadPolicy:
             BucketName: !Ref CuratedBucket
+        - S3ReadPolicy:
+            BucketName: dibmw-prod-athena-results-bucket
         - S3WritePolicy:
             BucketName: !Ref ResultsBucket
         - Statement:

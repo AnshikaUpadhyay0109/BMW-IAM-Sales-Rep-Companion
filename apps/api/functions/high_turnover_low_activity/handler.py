@@ -15,7 +15,7 @@ WITH dataset_anchor AS (
     SELECT
         CAST(DATE_TRUNC('month', DATE_ADD('month', -1, MAX(invoice_date))) AS DATE) AS current_month,
         CAST(DATE_ADD('month', -5, DATE_TRUNC('month', DATE_ADD('month', -1, MAX(invoice_date)))) AS DATE) AS history_start_month
-    FROM "dibmw-dev-sellout"."sellout_view"
+    FROM "dibmw-prod-sellout"."sellout_view_v2"
 ),
 
 dealer_attributes AS (
@@ -26,7 +26,7 @@ dealer_attributes AS (
         MAX_BY(region, invoice_date) AS region,
         MAX_BY(dealer_city, invoice_date) AS dealer_city,
         MAX_BY(district_area, invoice_date) AS district_area
-    FROM "dibmw-dev-sellout"."sellout_view"
+    FROM "dibmw-prod-sellout"."sellout_view_v2"
     GROUP BY country, dealer_code
 ),
 
@@ -38,7 +38,7 @@ monthly_dealer_metrics AS (
         SUM(COALESCE(s.dealer_landing_price, s.purchase_actual, 0)) AS monthly_purchase_value,
         SUM(COALESCE(s.net_amount, s.sales_actual, 0)) AS monthly_sales_revenue,
         COUNT(DISTINCT s.invoice_number) AS monthly_sales_invoice_count
-    FROM "dibmw-dev-sellout"."sellout_view" s
+    FROM "dibmw-prod-sellout"."sellout_view_v2" s
     CROSS JOIN dataset_anchor a
     WHERE s.invoice_date >= a.history_start_month
       AND s.invoice_date < DATE_ADD('month', 1, a.current_month)

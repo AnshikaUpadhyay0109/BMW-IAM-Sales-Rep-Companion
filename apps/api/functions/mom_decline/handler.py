@@ -78,7 +78,7 @@ dealer_list AS (
         , s.region
         , s.dealer_city
         , s.district_area
-    FROM "dibmw-dev-sellout"."sellout_view" s
+    FROM "dibmw-prod-sellout"."sellout_view_v2" s
     INNER JOIN months m
         ON s.invoice_date >= m.month_start
        AND s.invoice_date < m.month_end
@@ -97,7 +97,7 @@ sales_agg AS (
               ELSE s.aftersales_category
           END AS aftersales_category
         , SUM(COALESCE(s.net_amount, s.sales_actual, 0)) AS sales_amount
-    FROM "dibmw-dev-sellout"."sellout_view" s
+    FROM "dibmw-prod-sellout"."sellout_view_v2" s
     INNER JOIN months m
         ON s.invoice_date >= m.month_start
        AND s.invoice_date < m.month_end
@@ -113,60 +113,45 @@ sales_agg AS (
           END
 ),
 
-complete_sales AS (
-    SELECT
-          d.dealer_code
-        , m.month_offset
-        , m.month_start AS sales_month
-        , c.category_order
-        , c.aftersales_category
-        , COALESCE(a.sales_amount, 0) AS sales_amount
-    FROM dealer_list d
-    CROSS JOIN months m
-    CROSS JOIN category_list c
-    LEFT JOIN sales_agg a
-        ON d.dealer_code = a.dealer_code
-       AND m.month_offset = a.month_offset
-       AND c.aftersales_category = a.aftersales_category
-),
-
 category_month_summary AS (
     SELECT
-          dealer_code
-        , category_order
-        , aftersales_category
+          sa.dealer_code
+        , c.category_order
+        , sa.aftersales_category
         , SUM(
               CASE
-                  WHEN month_offset = 3 THEN sales_amount
+                  WHEN sa.month_offset = 3 THEN sa.sales_amount
                   ELSE 0
               END
           ) AS current_month_minus_3_sales
         , SUM(
               CASE
-                  WHEN month_offset = 2 THEN sales_amount
+                  WHEN sa.month_offset = 2 THEN sa.sales_amount
                   ELSE 0
               END
           ) AS current_month_minus_2_sales
         , SUM(
               CASE
-                  WHEN month_offset = 1 THEN sales_amount
+                  WHEN sa.month_offset = 1 THEN sa.sales_amount
                   ELSE 0
               END
           ) AS current_month_minus_1_sales
         , ARRAY_JOIN(
               ARRAY[
-                    CAST(ROUND(SUM(CASE WHEN month_offset = 3 THEN sales_amount ELSE 0 END), 2) AS varchar)
-                  , CAST(ROUND(SUM(CASE WHEN month_offset = 2 THEN sales_amount ELSE 0 END), 2) AS varchar)
-                  , CAST(ROUND(SUM(CASE WHEN month_offset = 1 THEN sales_amount ELSE 0 END), 2) AS varchar)
+                    CAST(ROUND(SUM(CASE WHEN sa.month_offset = 3 THEN sa.sales_amount ELSE 0 END), 2) AS varchar)
+                  , CAST(ROUND(SUM(CASE WHEN sa.month_offset = 2 THEN sa.sales_amount ELSE 0 END), 2) AS varchar)
+                  , CAST(ROUND(SUM(CASE WHEN sa.month_offset = 1 THEN sa.sales_amount ELSE 0 END), 2) AS varchar)
               ],
               ', '
           ) AS sales_current_month_minus_3_to_minus_1
-    FROM complete_sales
-    WHERE month_offset IN (1, 2, 3)
+    FROM sales_agg sa
+    LEFT JOIN category_list c
+        ON c.aftersales_category = sa.aftersales_category
+    WHERE sa.month_offset IN (1, 2, 3)
     GROUP BY
-          dealer_code
-        , category_order
-        , aftersales_category
+          sa.dealer_code
+        , c.category_order
+        , sa.aftersales_category
 ),
 
 pivoted_dealer AS (

@@ -36,7 +36,7 @@ customer_counts AS (
             END
           ) AS last_year_same_month_customer_count
 
-    FROM "dibmw-dev-sellout"."sellout_view" s
+    FROM "dibmw-prod-sellout"."sellout_view_v2" s
     CROSS JOIN date_params d
     GROUP BY s.dealer_code
 ),
@@ -66,7 +66,7 @@ base_data AS (
           , 2) AS growth_degrowth_pct
 
     FROM customer_counts c
-    LEFT JOIN "dibmw-dev-sellout"."sellout_view" s
+    LEFT JOIN "dibmw-prod-sellout"."sellout_view_v2" s
         ON s.dealer_code = c.dealer_code
 ),
 
